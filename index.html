@@ -376,18 +376,12 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="songless-seeds.js"></script>
+<script src="songless-database.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════
-// CATALOGUE — queries iTunes Search (exécutées au runtime)
-// L'API iTunes renvoie Access-Control-Allow-Origin: *
-// → fonctionne directement depuis le navigateur, sans proxy
+// CONFIGURATION
 // ═══════════════════════════════════════════════════════
-const QUERIES = (window.SONGLESS_SEEDS || []).map(seed =>
-  typeof seed === 'string' ? seed : seed.query
-);
-
 const CATEGORY_LABELS = {
   rap: 'Rap',
   variete: 'Variété',
@@ -397,11 +391,6 @@ const CATEGORY_LABELS = {
 const RESET_MODE = 'midnight';
 const TEST_RESET_MS = 2 * 60 * 1000;
 const DAILY_STATE_KEY = 'songless_fr_daily_state';
-const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v5';
-const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v5';
-const CATALOG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_FETCHED_SEEDS_PER_CATEGORY = 12;
-const TARGET_CATALOG_SIZE = 750;
 
 const RAP_HINTS = [
   'ninho', 'pnl', 'sch', 'damso', 'lomepal', 'jul', 'bigflo', 'soprano', 'gims',
@@ -673,258 +662,65 @@ function isCorrect(guess) {
 function maxDur() { return DURATIONS[Math.min(attempt, MAX_TRIES - 1)]; }
 
 // ═══════════════════════════════════════════════════════
-// ITUNES FETCH — direct JSON, avec secours
+// CATALOGUE CHARGEMENT
 // ═══════════════════════════════════════════════════════
-function fetchITunes(query) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'itunesCallback_' + Math.round(100000 * Math.random());
-    const script = document.createElement('script');
-    
-    const timeoutId = setTimeout(() => {
-      cleanup();
-      reject(new Error('iTunes JSONP Timeout'));
-    }, 12000);
-
-    function cleanup() {
-      clearTimeout(timeoutId);
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-      delete window[callbackName];
-    }
-
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data?.results || []);
-    };
-
-    script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=fr&media=music&entity=song&limit=25&lang=fr_fr&callback=${callbackName}`;
-    script.onerror = function() {
-      cleanup();
-      reject(new Error('iTunes JSONP Script Error'));
-    };
-
-    document.body.appendChild(script);
-  });
-}
-
-function fetchDeezer(query) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'deezerCallback_' + Math.round(100000 * Math.random());
-    const script = document.createElement('script');
-    
-    const timeoutId = setTimeout(() => {
-      cleanup();
-      reject(new Error('Deezer JSONP Timeout'));
-    }, 12000);
-
-    function cleanup() {
-      clearTimeout(timeoutId);
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-      delete window[callbackName];
-    }
-
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data?.data || []);
-    };
-
-    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=25&output=jsonp&callback=${callbackName}`;
-    script.onerror = function() {
-      cleanup();
-      reject(new Error('Deezer JSONP Script Error'));
-    };
-
-    document.body.appendChild(script);
-  });
-}
-
-function fetchDeezerAlbum(albumId) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'deezerAlbumCallback_' + Math.round(100000 * Math.random());
-    const script = document.createElement('script');
-    
-    const timeoutId = setTimeout(() => {
-      cleanup();
-      reject(new Error('Deezer Album JSONP Timeout'));
-    }, 8000);
-
-    function cleanup() {
-      clearTimeout(timeoutId);
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-      delete window[callbackName];
-    }
-
-    window[callbackName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-
-    script.src = `https://api.deezer.com/album/${albumId}?output=jsonp&callback=${callbackName}`;
-    script.onerror = function() {
-      cleanup();
-      reject(new Error('Deezer Album JSONP Script Error'));
-    };
-
-    document.body.appendChild(script);
-  });
-}
-
-function mapItunesItem(item, category) {
-  if (!item?.previewUrl) return null;
-  if (isRejectedTrack(item.trackName, item.primaryGenreName || '')) return null;
-
-  return {
-    title:   item.trackName,
-    artist:  item.artistName,
-    preview: item.previewUrl,
-    cover:   (item.artworkUrl100 || '').replace('100x100bb', '300x300bb'),
-    year:    item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
-    genre:   item.primaryGenreName || '',
-    apple:   item.trackViewUrl || item.collectionViewUrl || '',
-    category,
-    source:  'iTunes'
-  };
-}
-
-function mapDeezerItem(item, category) {
-  if (!item?.preview) return null;
-  if (isRejectedTrack(item.title, item.artist?.name || '')) return null;
-
-  return {
-    title:   item.title,
-    artist:  item.artist?.name || '',
-    preview: item.preview,
-    cover:   item.album?.cover_big || item.album?.cover_xl || item.album?.cover || '',
-    year:    null,
-    genre:   '',
-    apple:   item.link || '',
-    category,
-    deezerAlbumId: item.album?.id || null,
-    rank:    item.rank || null,
-    source:  'Deezer'
-  };
-}
-
-async function fetchSeedResults(query, category) {
-  try {
-    const itunesItems = await fetchITunes(query);
-    const mapped = itunesItems.map(item => mapItunesItem(item, category)).filter(Boolean);
-    if (mapped.length > 0) {
-      console.log(`[Songless] "${query}" chargé depuis iTunes (${mapped.length} morceaux)`);
-      return mapped;
-    }
-  } catch (error) {
-    console.warn('[Songless] Échec iTunes pour', query, error);
-  }
-
-  try {
-    const deezerItems = await fetchDeezer(query);
-    const mapped = deezerItems.map(item => mapDeezerItem(item, category)).filter(Boolean);
-    if (mapped.length > 0) {
-      console.log(`[Songless] "${query}" chargé depuis Deezer (${mapped.length} morceaux)`);
-      return mapped;
-    }
-  } catch (error) {
-    console.warn('[Songless] Échec Deezer pour', query, error);
-  }
-
-  return [];
-}
-
-function loadAnyCachedCatalog() {
-  try {
-    const raw = localStorage.getItem(CATALOG_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-async function buildCatalog() {
+function buildCatalog() {
   showLoading('Chargement du catalogue…');
-  const cached = loadCachedCatalog();
-  if (cached && cached.length > 0) {
-    catalog = cached;
-    pruneRecentSongs();
-    pruneDailyState();
-    renderMenuState();
-    hideLoading();
-    showMenu();
-    return;
-  }
-
-  if (QUERIES.length === 0) {
-    showError('Aucune seed locale disponible pour construire le catalogue.');
-    return;
-  }
-
-  const results = [];
-  const categoryOrder = ['rap', 'pop', 'variete'];
-  const TARGET_PER_CATEGORY = Math.floor(TARGET_CATALOG_SIZE / 3);
-
-  for (const category of categoryOrder) {
-    const seeds = sampleSeedsByCategory(category, MAX_FETCHED_SEEDS_PER_CATEGORY);
-    let categoryCount = 0;
-    for (const seed of seeds) {
-      try {
-        const items = await fetchSeedResults(seed.query, category);
-        results.push(...items);
-        categoryCount += items.length;
-      } catch (error) {
-        console.warn('[Songless] Seed processing failed', seed.query, error);
-      }
-      if (categoryCount >= TARGET_PER_CATEGORY) {
-        console.log(`[Songless] Quota atteint pour ${category} (${categoryCount} morceaux)`);
-        break;
-      }
-      await sleep(1250);
-    }
-  }
-
-  // Dédoublonnage par titre+artiste normalisé
-  const seen = new Set();
-  catalog = results.filter(s => {
-    const k = normalize(s.artist) + '|' + normalize(s.title);
-    if (seen.has(k)) return false;
-    seen.add(k); return true;
-  });
-
-  pruneRecentSongs();
-
+  
+  // Charge la base de données statique pré-générée
+  catalog = window.SONGLESS_DATABASE || [];
+  
   if (catalog.length === 0) {
-    const fallback = loadAnyCachedCatalog();
-    if (fallback && fallback.length > 0) {
-      catalog = fallback;
-      pruneRecentSongs();
-      pruneDailyState();
-      renderMenuState();
-      hideLoading();
-      showMenu();
-      showToast('Catalogue hors ligne chargé depuis le cache');
-      return;
-    }
-
-    showError('Impossible de charger le catalogue.\nVérifiez votre connexion internet.');
+    showError('Impossible de charger le catalogue.\nVeuillez vérifier que le fichier "songless-database.js" est bien présent.');
     return;
   }
-  saveCachedCatalog(catalog);
+  
+  pruneRecentSongs();
   pruneDailyState();
   renderMenuState();
   hideLoading();
   showMenu();
+  console.log(`[Songless] Catalogue statique chargé avec succès (${catalog.length} morceaux)`);
+}
+
+// ═══════════════════════════════════════════════════════
+// SELECTION DETERMINISTE / ALEATOIRE DU MORCEAU
+// ═══════════════════════════════════════════════════════
+
+// Générateur pseudo-aléatoire déterministe (LCG) basé sur la date
+function getDailySong(pool, category) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dateStr = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+  
+  // Graine combinant la date et la catégorie
+  const seedStr = dateStr + '-' + (category || 'all');
+  let hash = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+  
+  const lcg = (seed) => {
+    const m = 0x80000000; // 2**31
+    const a = 1103515245;
+    const c = 12345;
+    let s = seed;
+    return function() {
+      s = (a * s + c) % m;
+      return s / (m - 1);
+    };
+  };
+  
+  const nextRand = lcg(Math.abs(hash));
+  const randIdx = Math.floor(nextRand() * pool.length);
+  return pool[randIdx];
 }
 
 // ═══════════════════════════════════════════════════════
 // LOAD SONG
 // ═══════════════════════════════════════════════════════
-async function loadSong() {
+function loadSong() {
   resetState();
   showLoading('Chargement du morceau…');
 
@@ -932,53 +728,40 @@ async function loadSong() {
     ? catalog.filter(song => song.category === currentCategory)
     : catalog;
 
-  let availableEntries = pool
-    .map((song, index) => ({ song, index }))
-    .filter(entry => !usedIndexes.has(entry.index));
-
-  if (availableEntries.length === 0) {
-    usedIndexes.clear();
-    availableEntries = pool.map((song, index) => ({ song, index }));
-    if (availableEntries.length === 0) {
-      showError(currentMode === 'daily' && currentCategory
-        ? `Plus de titres dispo pour ${CATEGORY_LABELS[currentCategory]}.`
-        : 'Catalogue vide.');
-      return;
-    }
-    showToast('Le catalogue a été recyclé pour continuer à jouer.');
+  if (pool.length === 0) {
+    showError(currentMode === 'daily' && currentCategory
+      ? `Plus de titres dispo pour ${CATEGORY_LABELS[currentCategory]}.`
+      : 'Catalogue vide.');
+    return;
   }
 
-  const chosen = availableEntries[Math.floor(Math.random() * availableEntries.length)];
-  usedIndexes.add(chosen.index);
-  currentSong = chosen.song;
+  let chosenSong;
+  if (currentMode === 'daily' && currentCategory) {
+    // Choix du jour unique et déterministe (le même pour tout le monde)
+    chosenSong = getDailySong(pool, currentCategory);
+    console.log(`[Songless] Mode quotidien déterministe. Titre du jour sélectionné.`);
+  } else {
+    // Mode libre classique (sélection aléatoire)
+    let availableEntries = pool
+      .map((song, index) => ({ song, index }))
+      .filter(entry => !usedIndexes.has(entry.index));
+
+    if (availableEntries.length === 0) {
+      usedIndexes.clear();
+      availableEntries = pool.map((song, index) => ({ song, index }));
+      showToast('Le catalogue a été recyclé pour continuer à jouer.');
+    }
+
+    const chosen = availableEntries[Math.floor(Math.random() * availableEntries.length)];
+    usedIndexes.add(chosen.index);
+    chosenSong = chosen.song;
+    console.log(`[Songless] Mode catalogue libre. Sélection aléatoire.`);
+  }
+
+  currentSong = chosenSong;
 
   console.log(`[Songless] Morceau sélectionné : "${currentSong.title}" par "${currentSong.artist}"`);
-  console.log(`[Songless] Source : ${currentSong.source || 'Inconnue (ancienne version du cache)'}`);
-  console.log(`[Songless] Album ID Deezer : ${currentSong.deezerAlbumId}`);
-
-  // Si le morceau vient de Deezer et n'a pas encore de détails (année / genre)
-  if (currentSong.deezerAlbumId && (!currentSong.year || !currentSong.genre)) {
-    console.log(`[Songless] Récupération des détails de l'album Deezer (ID: ${currentSong.deezerAlbumId})...`);
-    try {
-      const albumData = await fetchDeezerAlbum(currentSong.deezerAlbumId);
-      console.log('[Songless] Données de l\'album reçues de Deezer :', albumData);
-      if (albumData) {
-        if (albumData.release_date) {
-          currentSong.year = new Date(albumData.release_date).getFullYear();
-        }
-        if (albumData.genres && albumData.genres.data && albumData.genres.data.length > 0) {
-          currentSong.genre = albumData.genres.data[0].name;
-        } else if (albumData.genre_id) {
-          currentSong.genre = 'Musique';
-        }
-        console.log(`[Songless] Métadonnées mises à jour -> Année: ${currentSong.year}, Genre: ${currentSong.genre}`);
-      }
-    } catch (err) {
-      console.warn('[Songless] Échec de la récupération des détails de l\'album Deezer', err);
-    }
-  } else {
-    console.log(`[Songless] Utilisation des détails existants. Année: ${currentSong.year}, Genre: ${currentSong.genre}`);
-  }
+  console.log(`[Songless] Utilisation des détails existants. Année: ${currentSong.year}, Genre: ${currentSong.genre}`);
 
   if (currentMode === 'daily' && currentCategory) {
     lockCategory(currentCategory);
