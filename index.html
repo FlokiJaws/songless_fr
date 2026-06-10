@@ -316,8 +316,8 @@
           <span class="mode-state" id="state-pop">Chargement…</span>
         </button>
         <button class="mode-btn mode-wide" data-mode="catalog">
-          <span class="mode-name">Catalogue complet</span>
-          <span class="mode-state">Tous les titres, en illimité, sans verrou journalier.</span>
+          <span class="mode-name">Catalogue complet <span style="font-size: 0.72rem; font-weight: normal; color: var(--muted);">(Pour calmer ton addiction a pas juer solo)</span></span>
+          <span class="mode-state">Tous les titres, en illimité, sans verrou journalier. Protégé par mot de passe.</span>
         </button>
       </div>
     </div>
@@ -397,11 +397,11 @@ const CATEGORY_LABELS = {
 const RESET_MODE = 'interval';
 const TEST_RESET_MS = 2 * 60 * 1000;
 const DAILY_STATE_KEY = 'songless_fr_daily_state';
-const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v3';
-const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v3';
+const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v4';
+const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v4';
 const CATALOG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_FETCHED_SEEDS_PER_CATEGORY = 5;
-const TARGET_CATALOG_SIZE = 360;
+const MAX_FETCHED_SEEDS_PER_CATEGORY = 12;
+const TARGET_CATALOG_SIZE = 750;
 
 const RAP_HINTS = [
   'ninho', 'pnl', 'sch', 'damso', 'lomepal', 'jul', 'bigflo', 'soprano', 'gims',
@@ -1069,6 +1069,11 @@ function startDailyCategory(category) {
 }
 
 function startCatalogMode() {
+  const pw = prompt("Entrez le mot de passe pour déverrouiller le catalogue complet :");
+  if (pw !== "Azertyuiop123") {
+    showToast("Mot de passe incorrect !");
+    return;
+  }
   currentMode = 'catalog';
   currentCategory = null;
   usedIndexes.clear();
