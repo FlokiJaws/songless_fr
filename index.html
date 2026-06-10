@@ -277,6 +277,11 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  button, .btn, .play-btn, .sug-item, .attempt-row {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 </style>
 </head>
 <body>
@@ -395,8 +400,8 @@ const DAILY_STATE_KEY = 'songless_fr_daily_state';
 const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v2';
 const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v2';
 const CATALOG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_FETCHED_SEEDS_PER_CATEGORY = 1;
-const TARGET_CATALOG_SIZE = 72;
+const MAX_FETCHED_SEEDS_PER_CATEGORY = 5;
+const TARGET_CATALOG_SIZE = 360;
 
 const RAP_HINTS = [
   'ninho', 'pnl', 'sch', 'damso', 'lomepal', 'jul', 'bigflo', 'soprano', 'gims',
@@ -973,9 +978,8 @@ async function loadSong() {
     lockCategory(currentCategory);
   }
 
-  audio.src = currentSong.preview;
-  audio.currentTime = 0;
-  audio.load();
+  
+
 
   hideLoading();
   buildUI();
@@ -1175,13 +1179,18 @@ function togglePlay() {
 }
 
 function playAudio() {
+  if (audio.src !== currentSong.preview) {
+    console.log('[Songless] Configuration de la source audio et chargement...');
+    audio.src = currentSong.preview;
+    audio.load();
+  }
   audio.currentTime = 0;
   audio.play().then(() => {
     isPlaying = true;
     $playBtn.textContent = '⏸';
     rafId = requestAnimationFrame(tick);
   }).catch(e => {
-    console.warn('play error', e);
+    console.warn('[Songless] play error', e);
     showToast('Erreur de lecture audio');
   });
 }
