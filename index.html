@@ -316,7 +316,7 @@
           <span class="mode-state" id="state-pop">Chargement…</span>
         </button>
         <button class="mode-btn mode-wide" data-mode="catalog">
-          <span class="mode-name">Catalogue complet <span style="font-size: 0.72rem; font-weight: normal; color: var(--muted);">(Pour calmer ton addiction a pas juer solo)</span></span>
+          <span class="mode-name">Catalogue complet</span>
           <span class="mode-state">Tous les titres, en illimité, sans verrou journalier. Protégé par mot de passe.</span>
         </button>
       </div>
@@ -394,11 +394,11 @@ const CATEGORY_LABELS = {
   pop: 'Pop'
 };
 
-const RESET_MODE = 'interval';
+const RESET_MODE = 'midnight';
 const TEST_RESET_MS = 2 * 60 * 1000;
 const DAILY_STATE_KEY = 'songless_fr_daily_state';
-const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v4';
-const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v4';
+const CATALOG_CACHE_KEY = 'songless_fr_catalog_cache_v5';
+const CATALOG_CACHE_TS_KEY = 'songless_fr_catalog_cache_ts_v5';
 const CATALOG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_FETCHED_SEEDS_PER_CATEGORY = 12;
 const TARGET_CATALOG_SIZE = 750;
@@ -867,19 +867,25 @@ async function buildCatalog() {
 
   const results = [];
   const categoryOrder = ['rap', 'pop', 'variete'];
+  const TARGET_PER_CATEGORY = Math.floor(TARGET_CATALOG_SIZE / 3);
+
   for (const category of categoryOrder) {
     const seeds = sampleSeedsByCategory(category, MAX_FETCHED_SEEDS_PER_CATEGORY);
+    let categoryCount = 0;
     for (const seed of seeds) {
       try {
         const items = await fetchSeedResults(seed.query, category);
         results.push(...items);
+        categoryCount += items.length;
       } catch (error) {
-        console.warn('Seed processing failed', seed.query, error);
+        console.warn('[Songless] Seed processing failed', seed.query, error);
       }
-      if (results.length >= TARGET_CATALOG_SIZE) break;
+      if (categoryCount >= TARGET_PER_CATEGORY) {
+        console.log(`[Songless] Quota atteint pour ${category} (${categoryCount} morceaux)`);
+        break;
+      }
       await sleep(1250);
     }
-    if (results.length >= TARGET_CATALOG_SIZE) break;
   }
 
   // Dédoublonnage par titre+artiste normalisé
@@ -1069,7 +1075,7 @@ function startDailyCategory(category) {
 }
 
 function startCatalogMode() {
-  const pw = prompt("Entrez le mot de passe pour déverrouiller le catalogue complet :");
+  const pw = prompt("Entrez le mot de passe pour déverrouiller le catalogue complet (Pour calmer ton addiction a pas juer solo) :");
   if (pw !== "Azertyuiop123") {
     showToast("Mot de passe incorrect !");
     return;
