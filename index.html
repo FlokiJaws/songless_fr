@@ -18,6 +18,7 @@
     --accent:   #7C5CFC;
     --accent2:  #A78BFA;
     --success:  #4ADE80;
+    --warning:  #FBBF24;
     --danger:   #F87171;
     --text:     #F0EEF8;
     --muted:    #8882A8;
@@ -72,9 +73,14 @@
     transition: border-color .2s, background .2s;
   }
   .attempt-row.correct { border-color: var(--success); background: rgba(74,222,128,.06); }
+  .attempt-row.correct-artist { border-color: var(--warning); background: rgba(251,191,36,.06); }
   .attempt-row.wrong   { border-color: var(--danger);  background: rgba(248,113,113,.06); }
   .attempt-row.skipped { border-color: var(--border);  opacity: .6; }
   .attempt-row.active  { border-color: var(--accent); }
+
+  .attempt-row.correct .attempt-icon { color: var(--success); }
+  .attempt-row.correct-artist .attempt-icon { color: var(--warning); }
+  .attempt-row.wrong .attempt-icon { color: var(--danger); }
 
   .attempt-icon { font-size: 1rem; flex-shrink: 0; width: 22px; text-align: center; }
   .attempt-text { font-size: .875rem; color: var(--muted); flex: 1; line-height: 1.3; }
@@ -659,6 +665,16 @@ function isCorrect(guess) {
   return false;
 }
 
+function isArtistCorrect(guess) {
+  const g = normalize(guess);
+  const a = normalize(currentSong.artist);
+  if (!g || !a) return false;
+  if (g === a || compactNormalize(guess) === compactNormalize(currentSong.artist)) return true;
+  if (g.includes(a)) return true;
+  if (g.length >= 4 && a.includes(g)) return true;
+  return false;
+}
+
 function maxDur() { return DURATIONS[Math.min(attempt, MAX_TRIES - 1)]; }
 
 // ═══════════════════════════════════════════════════════
@@ -1115,6 +1131,7 @@ function submitGuess() {
   $sugs.innerHTML = '';
 
   const ok = isCorrect(val);
+  const isArtistOk = !ok && isArtistCorrect(val);
   const row  = document.getElementById('row-' + attempt);
   const icon = document.getElementById('icon-' + attempt);
   const text = document.getElementById('text-' + attempt);
@@ -1122,7 +1139,7 @@ function submitGuess() {
   row.classList.remove('active');
   icon.textContent = ok ? '✓' : '✗';
   text.textContent = val; text.classList.add('filled');
-  row.classList.add(ok ? 'correct' : 'wrong');
+  row.classList.add(ok ? 'correct' : isArtistOk ? 'correct-artist' : 'wrong');
 
   $input.value = ''; $btnSubmit.disabled = true;
 
