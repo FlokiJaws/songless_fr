@@ -309,9 +309,9 @@
       <div class="menu-title">Choisis ton mode</div>
       <div class="menu-sub">Chaque catégorie te donne 1 morceau par période. En test, le reset se fait toutes les 2 minutes. Le mode catalogue reste libre et illimité.</div>
       <div class="mode-grid" id="modeGrid">
-        <button class="mode-btn primary" data-mode="daily" data-category="rap">
-          <span class="mode-name">Rap</span>
-          <span class="mode-state" id="state-rap">Chargement…</span>
+        <button class="mode-btn primary" data-mode="daily" data-category="rock">
+          <span class="mode-name">Rock</span>
+          <span class="mode-state" id="state-rock">Chargement…</span>
         </button>
         <button class="mode-btn primary" data-mode="daily" data-category="variete">
           <span class="mode-name">Variété</span>
@@ -320,6 +320,10 @@
         <button class="mode-btn primary" data-mode="daily" data-category="pop">
           <span class="mode-name">Pop</span>
           <span class="mode-state" id="state-pop">Chargement…</span>
+        </button>
+        <button class="mode-btn primary" data-mode="daily" data-category="rap">
+          <span class="mode-name">Rap</span>
+          <span class="mode-state" id="state-rap">Chargement…</span>
         </button>
         <button class="mode-btn mode-wide" data-mode="catalog">
           <span class="mode-name">Catalogue complet</span>
@@ -389,20 +393,20 @@
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════
 const CATEGORY_LABELS = {
-  rap: 'Rap',
+  rock: 'Rock',
   variete: 'Variété',
-  pop: 'Pop'
+  pop: 'Pop',
+  rap: 'Rap'
 };
 
 const RESET_MODE = 'midnight';
 const TEST_RESET_MS = 2 * 60 * 1000;
 const DAILY_STATE_KEY = 'songless_fr_daily_state';
 
-const RAP_HINTS = [
-  'ninho', 'pnl', 'sch', 'damso', 'lomepal', 'jul', 'bigflo', 'soprano', 'gims',
-  'mhd', 'dadju', 'gazo', 'tayc', 'franglish', 'kendji', 'sextion', 'sexion', 'naza',
-  'niska', 'koba', 'hamza', 'orelsan', 'nekfeu', 'vald', 'tiakola', 'sdm', 'plk', 'djadja',
-  'black m', 'maitre gims', 'maitre', 'm pokora'
+const ROCK_HINTS = [
+  'indochine', 'rita mitsouko', 'telephone', 'trust', 'noir desir', 'mano negra',
+  'negresses vertes', 'dutronc', 'axel bauer', 'capdevielle', 'catherine lara',
+  'aubert', 'coutin', 'avions', 'taxi girl', 'charlelie', 'animo', 'jesse garon'
 ];
 
 const POP_HINTS = [
@@ -413,7 +417,7 @@ const POP_HINTS = [
 
 function inferCategory(query) {
   const norm = normalize(query);
-  if (RAP_HINTS.some(hint => norm.includes(hint))) return 'rap';
+  if (ROCK_HINTS.some(hint => norm.includes(hint))) return 'rock';
   if (POP_HINTS.some(hint => norm.includes(hint))) return 'pop';
   return 'variete';
 }
@@ -839,7 +843,7 @@ function getModeLabel() {
 function renderMenuState() {
   pruneDailyState();
   const now = Date.now();
-  ['rap', 'variete', 'pop'].forEach(category => {
+  ['rock', 'variete', 'pop', 'rap'].forEach(category => {
     const stateEl = document.getElementById('state-' + category);
     const button = $modeGrid.querySelector(`[data-mode="daily"][data-category="${category}"]`);
     const lockedUntil = dailyState[category] || 0;

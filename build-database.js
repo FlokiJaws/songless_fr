@@ -57,6 +57,25 @@ async function fetchITunes(query) {
   } catch (err) {
     throw err;
   }
+
+function isExactSeedMatch(item, seed, normalize) {
+  const seedTitle = normalize(seed.title || '');
+  const seedArtist = normalize(seed.artist || '');
+  const itemTitle = normalize(item.title || '');
+  const itemArtist = normalize(item.artist || '');
+
+  if (!seedTitle || !seedArtist || !itemTitle || !itemArtist) return false;
+  if (itemTitle === seedTitle && itemArtist === seedArtist) return true;
+  if (itemTitle === seedTitle && itemArtist.includes(seedArtist)) return true;
+  if (itemTitle.includes(seedTitle) && itemArtist === seedArtist) return true;
+  return false;
+}
+
+function selectExactItems(items, seed, normalize) {
+  const exactItems = items.filter(item => isExactSeedMatch(item, seed, normalize));
+  if (exactItems.length > 0) return exactItems.slice(0, 1);
+  return [];
+}
 }
 
 // Fetch from Deezer Search
@@ -190,9 +209,10 @@ async function run() {
       }
     }
 
-    // Add resolved tracks to database
+    // Add resolved tracks to database (strictly 1 match per seed)
     let addedCount = 0;
-    for (const item of items) {
+    if (items.length > 0) {
+      const item = items[0];
       const key = `${normalize(item.artist)}|${normalize(item.title)}`;
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
